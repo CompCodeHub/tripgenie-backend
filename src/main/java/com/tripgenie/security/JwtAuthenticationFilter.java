@@ -10,6 +10,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -33,39 +34,46 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader("Authorization");
 
         // Get token from header
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            String username = jwtService.getUsername(token);
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        String token = authHeader.substring(7);
+        String username = jwtService.getUsername(token);
 
-            try {
+        try {
 
-                // Check if any user is not authenticated
-                if (username != null && SecurityContextHolder.getContext().getAuthentication() != null) {
+            // Check if any user is not authenticated
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                    // Get user details from username
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                // Get user details from username
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                    // If userdetails aren't null and token isn't expired
-                    if (userDetails != null && !jwtService.isTokenExpired(token)) {
-                        UsernamePasswordAuthenticationToken authenticationToken =
-                                new UsernamePasswordAuthenticationToken(userDetails,
-                                        userDetails.getPassword(),
-                                        userDetails.getAuthorities()
-                                );
+                // If userdetails aren't null and token isn't expired
+                if (userDetails != null && !jwtService.isTokenExpired(token)) {
+                    UsernamePasswordAuthenticationToken authenticationToken =
+                            new UsernamePasswordAuthenticationToken(userDetails,
+                                    userDetails.getPassword(),
+                                    userDetails.getAuthorities()
+                            );
 
-                        // Set authentication
-                        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-                    }
+                    authenticationToken.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request)
+                    );
 
+                    // Set authentication
+                    SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                 }
 
-                // Forward the request
-                filterChain.doFilter(request, response);
-
-            } catch (ExpiredJwtException expiredJwtException) {
-                // Forward the request to your controller for handling the expired token
-                request.getRequestDispatcher("/api/users/expired-token").forward(request, response);
             }
+
+            // Forward the request
+            filterChain.doFilter(request, response);
+
+        } catch (ExpiredJwtException expiredJwtException) {
+            // Forward the request to your controller for handling the expired token
+            request.getRequestDispatcher("/api/users/expired-token").forward(request, response);
         }
+
     }
 }
