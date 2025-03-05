@@ -1,6 +1,7 @@
 package com.tripgenie.service;
 
 import com.tripgenie.dto.AuthSucessDto;
+import com.tripgenie.exception.UserAlreadyExistsException;
 import com.tripgenie.model.Role;
 import com.tripgenie.model.User;
 import com.tripgenie.repository.RoleRepository;
@@ -28,6 +29,11 @@ public class UserService {
     private final AuthenticationManager authenticationManager;
 
     public Map<String, Object> register(User user) {
+
+        Optional<User> userOptional = userRepository.findByUsernameOrEmail(user.getUsername(), user.getEmail());
+        if (userOptional.isPresent()) {
+            throw new UserAlreadyExistsException("User with given username or email already exists!");
+        }
 
         // Set user role
         Role userRole = roleRepository.findByName("USER");
